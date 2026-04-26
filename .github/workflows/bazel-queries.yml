@@ -299,16 +299,10 @@ jobs:
           bazel aquery '//data:processor' --output=jsonproto 2>/dev/null \
             | head -100
 
-      - name: "Use Starlark to extract action mnemonics and their outputs"
+      - name: "Use jsonproto + jq to extract action mnemonics and output artifact IDs"
         run: |
-          cat > /tmp/aquery_starlark.bzl <<'STARLARK'
-          def format(action):
-              outputs = [f.path for f in action.outputs.to_list()]
-              return "%s -> %s" % (action.mnemonic, outputs)
-          STARLARK
-          bazel aquery '//app:main' \
-            --output=starlark \
-            --starlark:file=/tmp/aquery_starlark.bzl
+          bazel aquery '//app:main' --output=jsonproto 2>/dev/null \
+            | jq -r '.actions[] | "\(.mnemonic) -> outputIds: \(.outputIds)"'
 
       # --- Comparing Dependency Graph vs Action Graph ---
 
