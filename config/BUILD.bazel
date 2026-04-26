@@ -1,5 +1,5 @@
 filegroup(
     name = "settings",
     srcs = ["settings.yaml"],
-    visibility = ["//visibility:public"],
+    visibility = ["//app:__pkg__"],
 )
