@@ -1,0 +1,17 @@
+load("@rules_python//python:defs.bzl", "py_test")
+
+py_test(
+    name = "test_processor",
+    srcs = ["test_processor.py"],
+    deps = [
+        "//data:processor",
+    ],
+)
+
+py_test(
+    name = "test_validator",
+    srcs = ["test_validator.py"],
+    deps = [
+        "//data:validator",
+    ],
+)

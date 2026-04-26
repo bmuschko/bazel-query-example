@@ -1,0 +1,322 @@
+name: Bazel Query Examples
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  # ==========================================================================
+  # bazel query - inspects the DEPENDENCY GRAPH (loading phase)
+  #
+  # Operates on the unresolved target graph before any build configuration is
+  # applied. Nodes are targets, edges are dependency relationships (srcs, deps,
+  # data). Does NOT evaluate select() or resolve toolchains.
+  #
+  # Reference: https://bazel.build/query/language
+  # ==========================================================================
+  query:
+    name: "bazel query - Dependency Graph"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Bazelisk
+        uses: bazelbuild/setup-bazelisk@v3
+
+      - name: Mount Bazel cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/bazel
+          key: bazel-query-${{ runner.os }}-${{ hashFiles('MODULE.bazel') }}
+          restore-keys: bazel-query-${{ runner.os }}-
+
+      # --- Target Discovery ---
+
+      - name: "List all targets in the repository"
+        run: bazel query '//...'
+
+      - name: "Find all py_binary targets"
+        run: bazel query 'kind(py_binary, //...)'
+
+      - name: "Find all py_test targets"
+        run: bazel query 'kind(py_test, //...)'
+
+      - name: "Find all py_library targets"
+        run: bazel query 'kind(py_library, //...)'
+
+      - name: "Find all filegroup targets"
+        run: bazel query 'kind(filegroup, //...)'
+
+      # --- Dependency Analysis ---
+
+      - name: "List ALL (transitive) dependencies of //app:main"
+        run: bazel query 'deps(//app:main)'
+
+      - name: "List only DIRECT dependencies of //app:main (depth 1)"
+        run: bazel query 'deps(//app:main, 1)'
+
+      - name: "Find all source files needed to build //app:main"
+        run: bazel query 'kind("source file", deps(//app:main))'
+
+      - name: "Find all rule targets (non-file) in the dependency tree of //app:main"
+        run: bazel query 'kind(rule, deps(//app:main))'
+
+      # --- Reverse Dependencies ---
+
+      - name: "Find which targets depend on //utils:math_utils (reverse deps)"
+        run: bazel query 'rdeps(//..., //utils:math_utils)'
+
+      - name: "Find which targets depend on //utils:string_utils"
+        run: bazel query 'rdeps(//..., //utils:string_utils)'
+
+      - name: "Find which targets depend on //data:data_pkg"
+        run: bazel query 'rdeps(//..., //data:data_pkg)'
+
+      # --- Dependency Paths ---
+
+      - name: "Find ALL paths from //app:main to //utils:math_utils"
+        run: bazel query 'allpaths(//app:main, //utils:math_utils)'
+
+      - name: "Find ONE (shortest) path from //app:main to //utils:math_utils"
+        run: bazel query 'somepath(//app:main, //utils:math_utils)'
+
+      - name: "Find path from //tests:test_processor to //utils:utils_pkg"
+        run: bazel query 'somepath(//tests:test_processor, //utils:utils_pkg)'
+
+      # --- Set Operations ---
+
+      - name: "Intersection: deps of //app:main that are py_library targets"
+        run: bazel query 'deps(//app:main) intersect kind(py_library, //...)'
+
+      - name: "Except: all targets EXCEPT test targets"
+        run: bazel query '//... except kind(py_test, //...)'
+
+      - name: "Union: all binary and test targets combined"
+        run: bazel query 'kind(py_binary, //...) union kind(py_test, //...)'
+
+      - name: "Shared deps: targets that BOTH test_processor and test_validator depend on"
+        run: bazel query 'deps(//tests:test_processor) intersect deps(//tests:test_validator)'
+
+      # --- Package & Label Inspection ---
+
+      - name: "List all packages in the repository"
+        run: bazel query '//...:all' --output package
+
+      - name: "List all rule targets in the //data package"
+        run: bazel query 'kind(rule, //data:all)'
+
+      - name: "Show label_kind output for all targets in //utils"
+        run: bazel query '//utils:all' --output label_kind
+
+      # --- Graph Visualization ---
+
+      - name: "Output the dependency graph of //app:main as DOT format"
+        run: |
+          bazel query 'deps(//app:main)' \
+            --notool_deps \
+            --noimplicit_deps \
+            --output graph
+
+      - name: "Output a minimal graph from //data:processor"
+        run: |
+          bazel query 'deps(//data:processor)' \
+            --notool_deps \
+            --noimplicit_deps \
+            --output graph
+
+  # ==========================================================================
+  # bazel cquery - inspects the CONFIGURED DEPENDENCY GRAPH (analysis phase)
+  #
+  # Like query, but evaluates build configuration first. This means:
+  #   - select() statements are resolved
+  #   - toolchains are resolved
+  #   - configuration transitions are visible
+  #   - each target label includes a config hash (e.g. //app:main (abc123))
+  #
+  # Use cquery when you need to see what actually gets built for a given
+  # platform/configuration, rather than the abstract dependency structure.
+  #
+  # Reference: https://bazel.build/query/cquery
+  # ==========================================================================
+  cquery:
+    name: "bazel cquery - Configured Dependency Graph"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Bazelisk
+        uses: bazelbuild/setup-bazelisk@v3
+
+      - name: Mount Bazel cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/bazel
+          key: bazel-cquery-${{ runner.os }}-${{ hashFiles('MODULE.bazel') }}
+          restore-keys: bazel-cquery-${{ runner.os }}-
+
+      # --- Target Discovery (with configuration) ---
+
+      - name: "Find all binary targets (note the config hash in output)"
+        run: bazel cquery 'kind(.*_binary, //...)'
+
+      - name: "Find all test targets"
+        run: bazel cquery 'kind(.*_test, //...)'
+
+      - name: "Find all library targets"
+        run: bazel cquery 'kind(.*_library, //...)'
+
+      # --- Configured Dependencies ---
+
+      - name: "Show all configured deps of //app:main (each has a config hash)"
+        run: bazel cquery 'deps(//app:main)'
+
+      - name: "Show only py_library deps of //app:main"
+        run: bazel cquery 'kind(py_library, deps(//app:main))'
+
+      - name: "Show direct configured deps of //app:main"
+        run: bazel cquery 'deps(//app:main, 1)'
+
+      # --- Output Formats ---
+
+      - name: "Show deps with label and rule kind"
+        run: bazel cquery 'deps(//app:main, 1)' --output=label_kind
+
+      - name: "Use Starlark output to extract target labels"
+        run: |
+          bazel cquery 'deps(//app:main)' \
+            --output=starlark \
+            --starlark:expr="str(target.label)"
+
+      - name: "Use Starlark output to show files produced by each target"
+        run: |
+          bazel cquery 'kind(rule, deps(//app:main))' \
+            --output=starlark \
+            --starlark:expr="'%s -> %s' % (target.label, [f.path for f in target.files.to_list()])"
+
+      # --- Filtering ---
+
+      - name: "Filter: find all targets in //data that //app:main depends on"
+        run: bazel cquery 'filter("//data", deps(//app:main))'
+
+      - name: "Filter: find all targets in //utils that //app:main depends on"
+        run: bazel cquery 'filter("//utils", deps(//app:main))'
+
+      # --- cquery vs query: demonstrating the difference ---
+
+      - name: "Compare query vs cquery output"
+        run: |
+          echo "=== bazel query (unconfigured) ==="
+          bazel query 'deps(//data:processor, 1)' 2>/dev/null
+          echo ""
+          echo "=== bazel cquery (configured - note the config hashes) ==="
+          bazel cquery 'deps(//data:processor, 1)' 2>/dev/null
+          echo ""
+          echo "cquery includes configuration hashes because it resolves the"
+          echo "build graph after applying platform and flag settings."
+
+  # ==========================================================================
+  # bazel aquery - inspects the ACTION GRAPH (analysis phase)
+  #
+  # Goes one level deeper than cquery. Instead of targets and dependencies,
+  # aquery shows the actual build ACTIONS - subprocesses that Bazel will spawn
+  # (compilers, linkers, file writers, etc.) with their full command lines,
+  # inputs, and outputs.
+  #
+  # Key insight: the dependency graph and action graph are NOT one-to-one.
+  # A single target may produce multiple actions, and actions operate on
+  # files (artifacts), not on targets.
+  #
+  # Reference: https://bazel.build/query/aquery
+  # ==========================================================================
+  aquery:
+    name: "bazel aquery - Action Graph"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Bazelisk
+        uses: bazelbuild/setup-bazelisk@v3
+
+      - name: Mount Bazel cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/bazel
+          key: bazel-aquery-${{ runner.os }}-${{ hashFiles('MODULE.bazel') }}
+          restore-keys: bazel-aquery-${{ runner.os }}-
+
+      # --- Listing Actions ---
+
+      - name: "Show all actions needed to build //app:main"
+        run: bazel aquery '//app:main'
+
+      - name: "Show all actions needed to build //data:processor"
+        run: bazel aquery '//data:processor'
+
+      # --- Filtering by Mnemonic ---
+      # Action mnemonics identify the type of action (e.g. FileWrite,
+      # Symlink, PythonZipper, TemplateExpand, etc.)
+
+      - name: "List all unique action mnemonics for //app:main"
+        run: |
+          bazel aquery '//app:main' 2>/dev/null \
+            | grep "Mnemonic:" \
+            | sort -u
+
+      - name: "Show only SourceSymlinkManifest actions"
+        run: |
+          bazel aquery 'mnemonic("SourceSymlinkManifest", //app:main)' \
+            2>/dev/null || echo "Mnemonic not found for this target"
+
+      - name: "Show only FileWrite actions"
+        run: |
+          bazel aquery 'mnemonic("FileWrite", //app:main)' \
+            2>/dev/null || echo "No FileWrite actions for this target"
+
+      # --- Input/Output Analysis ---
+
+      - name: "Show actions whose inputs include Python files"
+        run: |
+          bazel aquery 'inputs(".*\.py", //app:main)' \
+            2>/dev/null || echo "Input filtering may not match any actions"
+
+      - name: "Show actions whose outputs match a pattern"
+        run: |
+          bazel aquery 'outputs(".*main.*", //app:main)' \
+            2>/dev/null || echo "Output filtering may not match any actions"
+
+      # --- Output Formats ---
+
+      - name: "Show action graph as textproto (machine-readable)"
+        run: |
+          bazel aquery '//data:processor' --output=textproto 2>/dev/null \
+            | head -100
+
+      - name: "Show action graph as jsonproto"
+        run: |
+          bazel aquery '//data:processor' --output=jsonproto 2>/dev/null \
+            | head -100
+
+      - name: "Use Starlark to extract action mnemonics and their outputs"
+        run: |
+          bazel aquery '//app:main' \
+            --output=starlark \
+            --starlark:expr="'%s -> %s' % (action.mnemonic, [f.path for f in action.outputs.to_list()])"
+
+      # --- Comparing Dependency Graph vs Action Graph ---
+
+      - name: "Dependency graph vs action graph are NOT one-to-one"
+        run: |
+          echo "=== Dependency Graph: targets that //data:processor depends on ==="
+          bazel query 'deps(//data:processor)' \
+            --notool_deps --noimplicit_deps 2>/dev/null
+          echo ""
+          echo "=== Action Graph: build actions for //data:processor ==="
+          bazel aquery '//data:processor' 2>/dev/null \
+            | grep -E "^action|Mnemonic:"
+          echo ""
+          echo "The dependency graph shows TARGETS and their relationships."
+          echo "The action graph shows ACTIONS (subprocesses) and their file I/O."
+          echo "A single target can produce multiple actions."

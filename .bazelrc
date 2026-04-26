@@ -1,0 +1,5 @@
+# Build settings
+build --verbose_failures
+
+# Test settings
+test --test_output=errors

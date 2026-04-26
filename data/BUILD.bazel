@@ -1,0 +1,30 @@
+load("@pip//:requirements.bzl", "requirement")
+load("@rules_python//python:defs.bzl", "py_library")
+
+py_library(
+    name = "data_pkg",
+    srcs = ["__init__.py"],
+    visibility = ["//visibility:public"],
+)
+
+py_library(
+    name = "processor",
+    srcs = ["processor.py"],
+    deps = [
+        ":data_pkg",
+        "//utils:math_utils",
+        requirement("pyyaml"),
+    ],
+    visibility = ["//visibility:public"],
+)
+
+py_library(
+    name = "validator",
+    srcs = ["validator.py"],
+    deps = [
+        ":data_pkg",
+        "//utils:string_utils",
+        requirement("requests"),
+    ],
+    visibility = ["//visibility:public"],
+)

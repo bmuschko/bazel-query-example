@@ -1,0 +1,6 @@
+app:
+  name: "Bazel Query Example"
+  version: "1.0.0"
+processing:
+  batch_size: 100
+  timeout: 30

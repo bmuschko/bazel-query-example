@@ -1,0 +1,21 @@
+load("@rules_python//python:defs.bzl", "py_library")
+
+py_library(
+    name = "utils_pkg",
+    srcs = ["__init__.py"],
+    visibility = ["//visibility:public"],
+)
+
+py_library(
+    name = "math_utils",
+    srcs = ["math_utils.py"],
+    deps = [":utils_pkg"],
+    visibility = ["//visibility:public"],
+)
+
+py_library(
+    name = "string_utils",
+    srcs = ["string_utils.py"],
+    deps = [":utils_pkg"],
+    visibility = ["//visibility:public"],
+)
