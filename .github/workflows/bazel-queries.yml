@@ -301,9 +301,14 @@ jobs:
 
       - name: "Use Starlark to extract action mnemonics and their outputs"
         run: |
+          cat > /tmp/aquery_starlark.bzl <<'STARLARK'
+          def format(action):
+              outputs = [f.path for f in action.outputs.to_list()]
+              return "%s -> %s" % (action.mnemonic, outputs)
+          STARLARK
           bazel aquery '//app:main' \
             --output=starlark \
-            --starlark:expr="'%s -> %s' % (action.mnemonic, [f.path for f in action.outputs.to_list()])"
+            --starlark:file=/tmp/aquery_starlark.bzl
 
       # --- Comparing Dependency Graph vs Action Graph ---
 
